@@ -28,6 +28,8 @@ import java.util.stream.Collectors;
 
 import net.minecraftforge.fml.config.IConfigSpec;
 import net.minecraftforge.fml.loading.FMLEnvironment;
+
+import org.apache.commons.lang3.function.TriFunction;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.logging.log4j.LogManager;
 
@@ -315,7 +317,14 @@ public class ForgeConfigSpec extends UnmodifiableConfigWrapper<UnmodifiableConfi
             context.setClazz(clazz);
             return define(path, new ValueSpec(defaultSupplier, validator, context), defaultSupplier);
         }
-        public <T> ConfigValue<T> define(List<String> path, ValueSpec value, Supplier<T> defaultSupplier) { // This is the root where everything at the end of the day ends up.
+        public <T, U extends ConfigValue<T>> U define(List<String> path, Supplier<T> defaultSupplier, Predicate<Object> validator, TriFunction<Builder, List<String>, Supplier<T>, U> constructor, Class<?> clazz) { //this is the correct method for when you need to use a custom instance of ConfigValue
+            context.setClazz(clazz);
+            return define(path, new ValueSpec(defaultSupplier, validator, context), defaultSupplier, constructor);
+        }
+        public <T> ConfigValue<T> define(List<String> path, ValueSpec value, Supplier<T> defaultSupplier) {
+        	return define(path, value, defaultSupplier, ConfigValue::new);
+        }
+        public <T, U extends ConfigValue<T>> U define(List<String> path, ValueSpec value, Supplier<T> defaultSupplier, TriFunction<Builder, List<String>, Supplier<T>, U> constructor) { // This is the root where everything at the end of the day ends up.
             if (!currentPath.isEmpty()) {
                 List<String> tmp = new ArrayList<>(currentPath.size() + path.size());
                 tmp.addAll(currentPath);
@@ -325,7 +334,7 @@ public class ForgeConfigSpec extends UnmodifiableConfigWrapper<UnmodifiableConfi
             storage.set(path, value);
             checkComment(path);
             context = new BuilderContext();
-            return new ConfigValue<>(this, path, defaultSupplier);
+            return constructor.apply(this, path, defaultSupplier);
         }
         public <V extends Comparable<? super V>> ConfigValue<V> defineInRange(String path, V defaultValue, V min, V max, Class<V> clazz) {
             return defineInRange(split(path), defaultValue, min, max, clazz);
@@ -821,7 +830,7 @@ public class ForgeConfigSpec extends UnmodifiableConfigWrapper<UnmodifiableConfi
 
         private ForgeConfigSpec spec;
 
-        ConfigValue(Builder parent, List<String> path, Supplier<T> defaultSupplier)
+        protected ConfigValue(Builder parent, List<String> path, Supplier<T> defaultSupplier)
         {
             this.parent = parent;
             this.path = path;
